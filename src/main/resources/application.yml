@@ -1,0 +1,70 @@
+server:
+  port: 8081
+  # Alternative configuration for port conflicts
+  # port: 0  # This would assign a random available port
+
+spring:
+  application:
+    name: risk-management-service
+  
+  datasource:
+    url: jdbc:h2:mem:riskdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+  
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.assessment.riskmanagement: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/risk-management.log
+
+# Application specific configuration
+risk-management:
+  kraken:
+    base-url: https://futures.kraken.com
+    api-version: v3
+    # Test credentials from assessment
+    api-key: /tjRZL5FBJ/IPhYv4CBrox7mPfPgiQ8v9ZT+z5EY9e28Hck4y9sYjOvP
+    private-key: T1qIe4efEWBjletsVTldzux9f4sH/yDpTp3vvL3XAaZhZVdTVBGPPn14MZebBxkPP1V5RNcmIdK2DYGk+N+MPPh9
+  
+  monitoring:
+    check-interval-seconds: 30
+    timezone: UTC
+  
+  risk:
+    default-daily-risk-percentage: 2.0
