@@ -10,22 +10,24 @@ import java.math.BigDecimal;
 public class TradingSignalRequest {
     
     @NotBlank(message = "Client ID is required")
+    @JsonProperty("client_id")
     private String clientId;
-    
+
     @NotBlank(message = "Symbol is required")
     private String symbol;
-    
+
     @NotBlank(message = "Strategy is required")
     private String strategy;
-    
+
     @JsonProperty("maxriskperday%")
     private BigDecimal maxRiskPerDayPercent;
-    
+
     @NotBlank(message = "Action is required")
     private String action;
-    
+
     @NotNull(message = "Order quantity is required")
     @Positive(message = "Order quantity must be positive")
+    @JsonProperty("quantity")
     private BigDecimal orderQty;
     
     private Boolean inverse = false;
