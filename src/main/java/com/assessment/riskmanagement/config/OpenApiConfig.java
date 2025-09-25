@@ -25,7 +25,7 @@ public class OpenApiConfig {
                                 .url("http://localhost:8081")
                                 .description("Development Server"),
                         new Server()
-                                .url("https://api.riskmanagement.com")
+                                .url("https://igor-riskmanagement.duckdns.org")
                                 .description("Production Server")))
                 .tags(List.of(
                         new Tag()
