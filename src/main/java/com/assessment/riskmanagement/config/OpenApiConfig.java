@@ -22,11 +22,11 @@ public class OpenApiConfig {
                         .version("1.0.0"))
                 .servers(List.of(
                         new Server()
-                                .url("http://localhost:8081")
-                                .description("Development Server"),
-                        new Server()
                                 .url("https://igor-riskmanagement.duckdns.org")
-                                .description("Production Server")))
+                                .description("Production Server"),
+                        new Server()
+                                .url("http://localhost:8081")
+                                .description("Development Server")))
                 .tags(List.of(
                         new Tag()
                                 .name("User Management")
