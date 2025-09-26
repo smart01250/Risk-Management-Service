@@ -243,20 +243,72 @@ public class UserController {
         }
     }
 
+    @PutMapping("/{clientId}/trading/{enabled}")
+    @Operation(
+        summary = "Enable/Disable trading for user",
+        description = "Enable or disable trading for a specific user"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Trading status updated successfully",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Success Response",
+                    value = """
+                    {
+                        "status": "success",
+                        "message": "Trading enabled for user CLIENT_ABC123XYZ",
+                        "user": {
+                            "clientId": "CLIENT_ABC123XYZ",
+                            "tradingEnabled": true,
+                            "isActive": true
+                        }
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    public ResponseEntity<Map<String, Object>> setTradingEnabled(
+            @Parameter(description = "Client ID of the user") @PathVariable String clientId,
+            @Parameter(description = "true to enable trading, false to disable") @PathVariable boolean enabled) {
+        try {
+            UserResponse user = userService.setTradingEnabled(clientId, enabled);
+
+            Map<String, Object> response = Map.of(
+                    "status", "success",
+                    "message", (enabled ? "Trading enabled" : "Trading disabled") + " for user " + clientId,
+                    "user", user
+            );
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = Map.of(
+                    "status", "error",
+                    "message", e.getMessage()
+            );
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+        }
+    }
+
     @DeleteMapping("/{clientId}")
     @Operation(summary = "Delete user", description = "Delete a user account")
     public ResponseEntity<Map<String, Object>> deleteUser(
             @Parameter(description = "Client ID of the user") @PathVariable String clientId) {
         try {
             userService.deleteUser(clientId);
-            
+
             Map<String, Object> response = Map.of(
                     "status", "success",
                     "message", "User deleted successfully"
             );
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = Map.of(
                     "status", "error",

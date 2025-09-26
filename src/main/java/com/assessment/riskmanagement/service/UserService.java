@@ -115,6 +115,17 @@ public class UserService {
         return convertToUserResponse(user);
     }
 
+    public UserResponse setTradingEnabled(String clientId, boolean enabled) {
+        User user = userRepository.findByClientId(clientId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setTradingEnabled(enabled);
+        user = userRepository.save(user);
+
+        logger.info("Trading {} for user {}", enabled ? "enabled" : "disabled", clientId);
+        return convertToUserResponse(user);
+    }
+
     public void deleteUser(String clientId) {
         User user = userRepository.findByClientId(clientId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
