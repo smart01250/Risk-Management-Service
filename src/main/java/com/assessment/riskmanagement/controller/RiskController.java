@@ -1,5 +1,6 @@
 package com.assessment.riskmanagement.controller;
 
+import com.assessment.riskmanagement.dto.RiskCheckResponse;
 import com.assessment.riskmanagement.entity.RiskEvent;
 import com.assessment.riskmanagement.service.RiskService;
 import com.assessment.riskmanagement.service.UserService;
@@ -97,7 +98,7 @@ public class RiskController {
             )
         )
     })
-    public ResponseEntity<Map<String, Object>> checkUserRisk(
+    public ResponseEntity<RiskCheckResponse> checkUserRisk(
             @Parameter(
                 description = "Client ID of the user to check risk for",
                 example = "CLIENT_ABC123XYZ"
@@ -107,15 +108,12 @@ public class RiskController {
             var user = userService.getUserEntityByClientId(clientId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            Map<String, Object> result = riskService.checkUserRisk(user);
+            RiskCheckResponse result = riskService.checkUserRisk(user);
 
             return ResponseEntity.ok(result);
 
         } catch (Exception e) {
-            Map<String, Object> errorResponse = Map.of(
-                    "status", "error",
-                    "message", e.getMessage()
-            );
+            RiskCheckResponse errorResponse = new RiskCheckResponse("error", e.getMessage(), "ERROR");
             return ResponseEntity.status(400).body(errorResponse);
         }
     }
@@ -124,17 +122,49 @@ public class RiskController {
     @Operation(summary = "Check all users risk", description = "Manually trigger risk check for all active users")
     public ResponseEntity<Map<String, Object>> checkAllUsersRisk() {
         try {
-            List<Map<String, Object>> results = riskService.checkAllUsersRisk();
-            
+            List<RiskCheckResponse> results = riskService.checkAllUsersRisk();
+
             Map<String, Object> response = Map.of(
                     "status", "success",
                     "message", "Risk check completed for all users",
                     "results", results,
                     "users_checked", results.size()
             );
-            
+
             return ResponseEntity.ok(response);
-            
+
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = Map.of(
+                    "status", "error",
+                    "message", e.getMessage()
+            );
+            return ResponseEntity.status(500).body(errorResponse);
+        }
+    }
+
+    @PostMapping("/reset-trading/{clientId}")
+    @Operation(summary = "Reset user trading status", description = "Re-enable trading for a specific user (for testing purposes)")
+    public ResponseEntity<Map<String, Object>> resetUserTradingStatus(
+            @Parameter(description = "Client ID of the user", example = "CLIENT_ABC123XYZ")
+            @PathVariable String clientId) {
+        try {
+            boolean success = riskService.resetUserTradingStatus(clientId);
+
+            if (success) {
+                Map<String, Object> response = Map.of(
+                        "status", "success",
+                        "message", "Trading status reset for user " + clientId,
+                        "client_id", clientId
+                );
+                return ResponseEntity.ok(response);
+            } else {
+                Map<String, Object> errorResponse = Map.of(
+                        "status", "error",
+                        "message", "User not found or failed to reset trading status"
+                );
+                return ResponseEntity.status(404).body(errorResponse);
+            }
+
         } catch (Exception e) {
             Map<String, Object> errorResponse = Map.of(
                     "status", "error",

@@ -1,6 +1,7 @@
 package com.assessment.riskmanagement.service;
 
 import com.assessment.riskmanagement.client.KrakenClient;
+import com.assessment.riskmanagement.dto.RiskCheckResponse;
 import com.assessment.riskmanagement.dto.kraken.KrakenBalanceResponse;
 import com.assessment.riskmanagement.entity.RiskEvent;
 import com.assessment.riskmanagement.entity.RiskEventType;
@@ -44,7 +45,7 @@ public class RiskService {
     @Autowired
     private ObjectMapper objectMapper;
 
-    public Map<String, Object> checkUserRisk(User user) {
+    public RiskCheckResponse checkUserRisk(User user) {
         try {
             // Use the currentBalance from database if available, otherwise try Kraken API
             BigDecimal currentBalance = user.getCurrentBalance();
@@ -78,23 +79,30 @@ public class RiskService {
             }
 
 
-            Map<String, Object> riskResult = new HashMap<>();
-            riskResult.put("user_id", user.getId().toString());
-            riskResult.put("client_id", user.getClientId());
-            riskResult.put("current_balance", currentBalance);
-            riskResult.put("initial_balance", user.getInitialBalance());
-            riskResult.put("risk_exceeded", false);
-            riskResult.put("actions_taken", new ArrayList<String>());
-            riskResult.put("risk_events", new ArrayList<>());
+            // Initialize response
+            RiskCheckResponse response = new RiskCheckResponse("success", "Risk check completed", "SAFE");
+            response.setUserId(user.getId().toString());
+            response.setClientId(user.getClientId());
+            response.setCurrentBalance(currentBalance);
+            response.setInitialBalance(user.getInitialBalance());
+            response.setRiskAbsoluteLimit(user.getDailyRiskAbsolute());
+            response.setRiskPercentageLimit(user.getDailyRiskPercentage());
+            response.setRiskEvents(new ArrayList<>());
+            response.setActionTaken("none");
+            response.setPositionsClosed(0);
 
             if (user.getInitialBalance() == null) {
                 user.setInitialBalance(currentBalance);
                 userService.updateLastRiskCheck(user);
                 logger.info("Set initial balance for user {}: {}", user.getClientId(), currentBalance);
-                return riskResult;
+                response.setInitialBalance(currentBalance);
+                response.setDailyLoss(BigDecimal.ZERO);
+                response.setDailyLossPercentage(BigDecimal.ZERO);
+                return response;
             }
 
 
+            // Calculate loss amounts
             BigDecimal lossAmount = user.getInitialBalance().subtract(currentBalance);
             BigDecimal lossPercentage = BigDecimal.ZERO;
             if (user.getInitialBalance().compareTo(BigDecimal.ZERO) > 0) {
@@ -102,45 +110,63 @@ public class RiskService {
                         .multiply(BigDecimal.valueOf(100));
             }
 
-            riskResult.put("loss_amount", lossAmount);
-            riskResult.put("loss_percentage", lossPercentage);
+            response.setDailyLoss(lossAmount);
+            response.setDailyLossPercentage(lossPercentage);
 
-
+            // Determine risk status
             boolean riskExceeded = false;
-            BigDecimal riskThreshold = null;
+            boolean atLimit = false;
             String riskType = null;
 
-            if (user.getDailyRiskAbsolute() != null && 
-                lossAmount.compareTo(user.getDailyRiskAbsolute()) >= 0) {
+            // Check absolute risk limit first
+            if (user.getDailyRiskAbsolute() != null &&
+                lossAmount.compareTo(user.getDailyRiskAbsolute()) > 0) {
                 riskExceeded = true;
-                riskThreshold = user.getDailyRiskAbsolute();
                 riskType = "absolute";
-            } else if (user.getDailyRiskPercentage() != null && 
-                       lossPercentage.compareTo(user.getDailyRiskPercentage()) >= 0) {
+            }
+            // Check percentage risk limit
+            else if (user.getDailyRiskPercentage() != null &&
+                     lossPercentage.compareTo(user.getDailyRiskPercentage()) > 0) {
                 riskExceeded = true;
-                riskThreshold = user.getDailyRiskPercentage();
                 riskType = "percentage";
             }
+            // Check if at limit (exactly at threshold)
+            else if ((user.getDailyRiskAbsolute() != null &&
+                      lossAmount.compareTo(user.getDailyRiskAbsolute()) == 0) ||
+                     (user.getDailyRiskPercentage() != null &&
+                      lossPercentage.compareTo(user.getDailyRiskPercentage()) == 0)) {
+                atLimit = true;
+            }
 
+            // Set risk status and handle actions
             if (riskExceeded) {
-                logger.warn("Risk limit exceeded for user {}: {} threshold {}", 
-                        user.getClientId(), riskType, riskThreshold);
+                response.setRiskStatus("EXCEEDED");
+                response.setMessage("Risk threshold exceeded - Trading disabled");
 
+                BigDecimal riskThreshold = riskType.equals("absolute") ?
+                    user.getDailyRiskAbsolute() : user.getDailyRiskPercentage();
+
+                logger.warn("Risk limit exceeded for user {}: {} threshold {}",
+                        user.getClientId(), riskType, riskThreshold);
 
                 List<String> actionsTaken = handleRiskExceeded(
                         user, currentBalance, lossAmount, lossPercentage, riskThreshold, riskType
                 );
 
-                riskResult.put("risk_exceeded", true);
-                riskResult.put("risk_threshold", riskThreshold);
-                riskResult.put("risk_type", riskType);
-                riskResult.put("actions_taken", actionsTaken);
+                response.setActionTaken("trading_disabled_positions_closed");
+                response.setPositionsClosed(actionsTaken.size() > 0 ?
+                    extractPositionsClosedCount(actionsTaken) : 0);
+            } else if (atLimit) {
+                response.setRiskStatus("AT_LIMIT");
+                response.setMessage("Risk check completed - At risk limit");
+            } else {
+                response.setRiskStatus("SAFE");
+                response.setMessage("Risk check completed");
             }
-
 
             userService.updateLastRiskCheck(user);
 
-            return riskResult;
+            return response;
 
         } catch (Exception e) {
             logger.error("Error checking risk for user {}: {}", user.getClientId(), e.getMessage());
@@ -148,7 +174,25 @@ public class RiskService {
         }
     }
 
-    private List<String> handleRiskExceeded(User user, BigDecimal currentBalance, 
+    private int extractPositionsClosedCount(List<String> actionsTaken) {
+        for (String action : actionsTaken) {
+            if (action.contains("Closed") && action.contains("open orders")) {
+                try {
+                    String[] parts = action.split(" ");
+                    for (String part : parts) {
+                        if (part.matches("\\d+")) {
+                            return Integer.parseInt(part);
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    logger.warn("Failed to parse positions closed count from: {}", action);
+                }
+            }
+        }
+        return 0;
+    }
+
+    private List<String> handleRiskExceeded(User user, BigDecimal currentBalance,
                                           BigDecimal lossAmount, BigDecimal lossPercentage,
                                           BigDecimal riskThreshold, String riskType) {
         List<String> actionsTaken = new ArrayList<>();
@@ -207,8 +251,8 @@ public class RiskService {
         return actionsTaken;
     }
 
-    public List<Map<String, Object>> checkAllUsersRisk() {
-        List<Map<String, Object>> results = new ArrayList<>();
+    public List<RiskCheckResponse> checkAllUsersRisk() {
+        List<RiskCheckResponse> results = new ArrayList<>();
 
         try {
 
@@ -218,15 +262,14 @@ public class RiskService {
 
             for (User user : users) {
                 try {
-                    Map<String, Object> riskResult = checkUserRisk(user);
+                    RiskCheckResponse riskResult = checkUserRisk(user);
                     results.add(riskResult);
 
                 } catch (Exception e) {
                     logger.error("Error checking risk for user {}: {}", user.getClientId(), e.getMessage());
-                    Map<String, Object> errorResult = new HashMap<>();
-                    errorResult.put("user_id", user.getId().toString());
-                    errorResult.put("client_id", user.getClientId());
-                    errorResult.put("error", e.getMessage());
+                    RiskCheckResponse errorResult = new RiskCheckResponse("error", e.getMessage(), "ERROR");
+                    errorResult.setUserId(user.getId().toString());
+                    errorResult.setClientId(user.getClientId());
                     results.add(errorResult);
                 }
             }
@@ -236,6 +279,25 @@ public class RiskService {
         } catch (Exception e) {
             logger.error("Error in checkAllUsersRisk: {}", e.getMessage());
             throw new RuntimeException("Error checking all users risk", e);
+        }
+    }
+
+    public boolean resetUserTradingStatus(String clientId) {
+        try {
+            var userOpt = userService.getUserEntityByClientId(clientId);
+            if (userOpt.isEmpty()) {
+                logger.warn("User not found for reset: {}", clientId);
+                return false;
+            }
+
+            User user = userOpt.get();
+            userService.updateTradingStatus(user, true);
+            logger.info("Trading status reset for user: {}", clientId);
+            return true;
+
+        } catch (Exception e) {
+            logger.error("Error resetting trading status for user {}: {}", clientId, e.getMessage());
+            return false;
         }
     }
 

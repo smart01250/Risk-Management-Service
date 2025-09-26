@@ -1,5 +1,6 @@
 package com.assessment.riskmanagement.service;
 
+import com.assessment.riskmanagement.dto.RiskCheckResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,13 +36,12 @@ public class MonitoringService {
             lastMonitoringRun = LocalDateTime.now(ZoneOffset.UTC);
 
 
-            List<Map<String, Object>> results = riskService.checkAllUsersRisk();
-            
+            List<RiskCheckResponse> results = riskService.checkAllUsersRisk();
+
             int usersChecked = results.size();
             int riskEventsTriggered = (int) results.stream()
                     .mapToLong(result -> {
-                        Boolean riskExceeded = (Boolean) result.get("risk_exceeded");
-                        return (riskExceeded != null && riskExceeded) ? 1 : 0;
+                        return "EXCEEDED".equals(result.getRiskStatus()) ? 1 : 0;
                     })
                     .sum();
 
