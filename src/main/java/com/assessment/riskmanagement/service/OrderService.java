@@ -12,6 +12,7 @@ import com.assessment.riskmanagement.repository.OrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,9 @@ public class OrderService {
 
     @Autowired
     private KrakenClient krakenClient;
+
+    @Value("${risk-management.kraken.demo-mode:false}")
+    private boolean demoMode;
 
     public Map<String, Object> processTradingSignal(TradingSignalRequest signal) {
         try {
@@ -97,40 +101,50 @@ public class OrderService {
 
             newOrder = orderRepository.save(newOrder);
 
-            // Place order with Kraken
+            // Place order with Kraken (or simulate in demo mode)
             try {
-                KrakenOrderRequest krakenRequest = new KrakenOrderRequest(
-                        signal.getSymbol(),
-                        signal.getAction().toLowerCase(),
-                        signal.getOrderQty()
-                );
-
-                if (signal.getStopLossPercent() != null) {
-                    krakenRequest.setStopPrice(signal.getStopLossPercent());
-                }
-
-                KrakenOrderResponse krakenResponse = krakenClient.placeOrder(
-                        user.getKrakenApiKey(),
-                        user.getKrakenPrivateKey(),
-                        krakenRequest
-                );
-
-                // Update order with Kraken response
-                if ("success".equals(krakenResponse.getResult())) {
+                if (demoMode) {
+                    // Demo mode - simulate successful order placement
+                    logger.info("DEMO MODE: Simulating order placement for {}", signal);
                     newOrder.setStatus(OrderStatus.OPEN);
-                    if (krakenResponse.getSendStatus() != null) {
-                        newOrder.setKrakenOrderId(krakenResponse.getSendStatus().getOrderId());
-                    }
+                    newOrder.setKrakenOrderId("DEMO_ORDER_" + System.currentTimeMillis());
                     newOrder.setExecutedAt(LocalDateTime.now());
+                    logger.info("DEMO MODE: Order simulated successfully with ID: {}", newOrder.getKrakenOrderId());
                 } else {
-                    newOrder.setStatus(OrderStatus.FAILED);
-                    newOrder.setErrorMessage(krakenResponse.getError());
+                    // Production mode - place real order with Kraken
+                    KrakenOrderRequest krakenRequest = new KrakenOrderRequest(
+                            signal.getSymbol(),
+                            signal.getAction().toLowerCase(),
+                            signal.getOrderQty()
+                    );
+
+                    if (signal.getStopLossPercent() != null) {
+                        krakenRequest.setStopPrice(signal.getStopLossPercent());
+                    }
+
+                    KrakenOrderResponse krakenResponse = krakenClient.placeOrder(
+                            user.getKrakenApiKey(),
+                            user.getKrakenPrivateKey(),
+                            krakenRequest
+                    );
+
+                    // Update order with Kraken response
+                    if ("success".equals(krakenResponse.getResult())) {
+                        newOrder.setStatus(OrderStatus.OPEN);
+                        if (krakenResponse.getSendStatus() != null) {
+                            newOrder.setKrakenOrderId(krakenResponse.getSendStatus().getOrderId());
+                        }
+                        newOrder.setExecutedAt(LocalDateTime.now());
+                    } else {
+                        newOrder.setStatus(OrderStatus.FAILED);
+                        newOrder.setErrorMessage(krakenResponse.getError());
+                    }
                 }
 
             } catch (Exception e) {
                 logger.error("Error placing order with Kraken: {}", e.getMessage());
                 newOrder.setStatus(OrderStatus.FAILED);
-                newOrder.setErrorMessage(e.getMessage());
+                newOrder.setErrorMessage(demoMode ? "Demo mode error: " + e.getMessage() : e.getMessage());
             }
 
             newOrder = orderRepository.save(newOrder);

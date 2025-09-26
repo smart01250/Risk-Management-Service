@@ -61,6 +61,7 @@ risk-management:
     # Test credentials from assessment
     api-key: /tjRZL5FBJ/IPhYv4CBrox7mPfPgiQ8v9ZT+z5EY9e28Hck4y9sYjOvP
     private-key: T1qIe4efEWBjletsVTldzux9f4sH/yDpTp3vvL3XAaZhZVdTVBGPPn14MZebBxkPP1V5RNcmIdK2DYGk+N+MPPh9
+    demo-mode: true  # Set to false for production trading
   
   monitoring:
     check-interval-seconds: 30

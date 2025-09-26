@@ -9,6 +9,7 @@ import com.assessment.riskmanagement.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,20 +32,30 @@ public class UserService {
     @Autowired
     private KrakenClient krakenClient;
 
+    @Value("${risk-management.kraken.demo-mode:false}")
+    private boolean demoMode;
+
     public UserResponse registerUser(UserRegistrationRequest request) {
         try {
-            // Validate Kraken credentials by making a test API call
-            KrakenAccountResponse accountInfo = krakenClient.getAccountInfo(
-                request.getKrakenApiKey(), 
-                request.getKrakenPrivateKey()
-            );
-
-            // Extract initial balance if available
             BigDecimal initialBalance = null;
-            if (accountInfo.getAccounts() != null && !accountInfo.getAccounts().isEmpty()) {
-                // Get the first account's balance
-                KrakenAccountResponse.Account account = accountInfo.getAccounts().get(0);
-                initialBalance = account.getBalance();
+
+            if (demoMode) {
+                // Demo mode - skip Kraken API validation and use mock data
+                logger.info("DEMO MODE: Skipping Kraken API validation for user registration");
+                initialBalance = new BigDecimal("10000.00"); // Mock initial balance
+            } else {
+                // Production mode - validate Kraken credentials by making a test API call
+                KrakenAccountResponse accountInfo = krakenClient.getAccountInfo(
+                    request.getKrakenApiKey(),
+                    request.getKrakenPrivateKey()
+                );
+
+                // Extract initial balance if available
+                if (accountInfo.getAccounts() != null && !accountInfo.getAccounts().isEmpty()) {
+                    // Get the first account's balance
+                    KrakenAccountResponse.Account account = accountInfo.getAccounts().get(0);
+                    initialBalance = account.getBalance();
+                }
             }
 
             // Generate unique client ID
@@ -58,12 +69,15 @@ public class UserService {
 
             user = userRepository.save(user);
 
-            logger.info("New user registered with client_id: {}", clientId);
+            logger.info("New user registered with client_id: {} (demo mode: {})", clientId, demoMode);
             return convertToUserResponse(user);
 
         } catch (Exception e) {
             logger.error("Error registering user: {}", e.getMessage());
-            throw new RuntimeException("Failed to register user. Please check your Kraken API credentials. Error: " + e.getMessage());
+            String errorMessage = demoMode ?
+                "Failed to register user in demo mode. Error: " + e.getMessage() :
+                "Failed to register user. Please check your Kraken API credentials. Error: " + e.getMessage();
+            throw new RuntimeException(errorMessage);
         }
     }
 
