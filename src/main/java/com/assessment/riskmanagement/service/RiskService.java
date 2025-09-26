@@ -46,19 +46,34 @@ public class RiskService {
 
     public Map<String, Object> checkUserRisk(User user) {
         try {
+            // Use the currentBalance from database if available, otherwise try Kraken API
+            BigDecimal currentBalance = user.getCurrentBalance();
 
-            KrakenBalanceResponse balanceInfo = krakenClient.getBalances(
-                    user.getKrakenApiKey(), 
-                    user.getKrakenPrivateKey()
-            );
-            
-            BigDecimal currentBalance = BigDecimal.ZERO;
-            if (balanceInfo.getAccounts() != null && !balanceInfo.getAccounts().isEmpty()) {
+            // If no currentBalance in database, try to get from Kraken API
+            if (currentBalance == null) {
+                try {
+                    KrakenBalanceResponse balanceInfo = krakenClient.getBalances(
+                            user.getKrakenApiKey(),
+                            user.getKrakenPrivateKey()
+                    );
 
-                for (KrakenBalanceResponse.Account account : balanceInfo.getAccounts()) {
-                    if (account.getBalance() != null) {
-                        currentBalance = currentBalance.add(account.getBalance());
+                    currentBalance = BigDecimal.ZERO;
+                    if (balanceInfo.getAccounts() != null && !balanceInfo.getAccounts().isEmpty()) {
+                        for (KrakenBalanceResponse.Account account : balanceInfo.getAccounts()) {
+                            if (account.getBalance() != null) {
+                                currentBalance = currentBalance.add(account.getBalance());
+                            }
+                        }
                     }
+
+                    // Update the user's currentBalance in database
+                    user.setCurrentBalance(currentBalance);
+                    userService.updateLastRiskCheck(user);
+
+                } catch (Exception krakenException) {
+                    logger.warn("Failed to get balance from Kraken API for user {}: {}. Using database value.",
+                            user.getClientId(), krakenException.getMessage());
+                    currentBalance = user.getCurrentBalance() != null ? user.getCurrentBalance() : BigDecimal.ZERO;
                 }
             }
 
