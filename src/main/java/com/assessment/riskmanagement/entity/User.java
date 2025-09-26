@@ -43,6 +43,9 @@ public class User {
     @Column(name = "initial_balance", precision = 19, scale = 2)
     private BigDecimal initialBalance;
 
+    @Column(name = "current_balance", precision = 19, scale = 2)
+    private BigDecimal currentBalance;
+
     @Column(name = "is_active", nullable = false)
     @NotNull
     private Boolean isActive = true;
@@ -98,6 +101,9 @@ public class User {
 
     public BigDecimal getInitialBalance() { return initialBalance; }
     public void setInitialBalance(BigDecimal initialBalance) { this.initialBalance = initialBalance; }
+
+    public BigDecimal getCurrentBalance() { return currentBalance; }
+    public void setCurrentBalance(BigDecimal currentBalance) { this.currentBalance = currentBalance; }
 
     public Boolean getIsActive() { return isActive; }
     public void setIsActive(Boolean isActive) { this.isActive = isActive; }

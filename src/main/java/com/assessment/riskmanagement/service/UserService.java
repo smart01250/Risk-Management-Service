@@ -14,8 +14,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -124,6 +128,72 @@ public class UserService {
 
         logger.info("Trading {} for user {}", enabled ? "enabled" : "disabled", clientId);
         return convertToUserResponse(user);
+    }
+
+    public Map<String, Object> updateUserBalanceWithRiskCheck(String clientId, double newBalance) {
+        User user = userRepository.findByClientId(clientId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Update balance
+        user.setCurrentBalance(BigDecimal.valueOf(newBalance));
+        user = userRepository.save(user);
+
+        // Calculate risk info
+        BigDecimal currentBalance = BigDecimal.valueOf(newBalance);
+        BigDecimal initialBalance = user.getInitialBalance();
+        BigDecimal lossAmount = initialBalance.subtract(currentBalance);
+        BigDecimal lossPercentage = BigDecimal.ZERO;
+
+        if (initialBalance.compareTo(BigDecimal.ZERO) > 0) {
+            lossPercentage = lossAmount.divide(initialBalance, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+        }
+
+        // Check if risk limits exceeded
+        boolean riskExceeded = false;
+        String riskStatus = "SAFE";
+        List<String> actionsTaken = new ArrayList<>();
+
+        if (user.getDailyRiskAbsolute() != null &&
+            lossAmount.compareTo(user.getDailyRiskAbsolute()) >= 0) {
+            riskExceeded = true;
+            riskStatus = "EXCEEDED";
+        } else if (user.getDailyRiskPercentage() != null &&
+                   lossPercentage.compareTo(user.getDailyRiskPercentage()) >= 0) {
+            riskExceeded = true;
+            riskStatus = "EXCEEDED";
+        } else if (user.getDailyRiskAbsolute() != null &&
+                   lossAmount.compareTo(user.getDailyRiskAbsolute().multiply(BigDecimal.valueOf(0.9))) >= 0) {
+            riskStatus = "AT_LIMIT";
+        }
+
+        // If risk exceeded, disable trading
+        if (riskExceeded && user.getTradingEnabled()) {
+            user.setTradingEnabled(false);
+            user = userRepository.save(user);
+            actionsTaken.add("Trading disabled");
+            actionsTaken.add("Risk event logged");
+        }
+
+        // Build response
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "success");
+        response.put("message", riskExceeded ?
+            "Balance updated for user " + clientId + " - RISK LIMIT EXCEEDED" :
+            "Balance updated for user " + clientId);
+        response.put("user", convertToUserResponse(user));
+
+        Map<String, Object> riskInfo = new HashMap<>();
+        riskInfo.put("loss_amount", lossAmount);
+        riskInfo.put("loss_percentage", lossPercentage);
+        riskInfo.put("risk_status", riskStatus);
+        if (!actionsTaken.isEmpty()) {
+            riskInfo.put("actions_taken", actionsTaken);
+        }
+        response.put("risk_info", riskInfo);
+
+        logger.info("Balance updated to {} for user {} - Risk Status: {}", newBalance, clientId, riskStatus);
+        return response;
     }
 
     public void deleteUser(String clientId) {
