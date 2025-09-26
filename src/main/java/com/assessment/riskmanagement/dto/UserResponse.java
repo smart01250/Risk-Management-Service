@@ -4,27 +4,29 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class UserResponse {
-    
+
     private String clientId;
     private Boolean isActive;
     private Boolean tradingEnabled;
     private BigDecimal dailyRiskAbsolute;
     private BigDecimal dailyRiskPercentage;
     private BigDecimal initialBalance;
+    private BigDecimal currentBalance;
     private LocalDateTime createdAt;
 
 
     public UserResponse() {}
 
-    public UserResponse(String clientId, Boolean isActive, Boolean tradingEnabled, 
-                       BigDecimal dailyRiskAbsolute, BigDecimal dailyRiskPercentage, 
-                       BigDecimal initialBalance, LocalDateTime createdAt) {
+    public UserResponse(String clientId, Boolean isActive, Boolean tradingEnabled,
+                       BigDecimal dailyRiskAbsolute, BigDecimal dailyRiskPercentage,
+                       BigDecimal initialBalance, BigDecimal currentBalance, LocalDateTime createdAt) {
         this.clientId = clientId;
         this.isActive = isActive;
         this.tradingEnabled = tradingEnabled;
         this.dailyRiskAbsolute = dailyRiskAbsolute;
         this.dailyRiskPercentage = dailyRiskPercentage;
         this.initialBalance = initialBalance;
+        this.currentBalance = currentBalance;
         this.createdAt = createdAt;
     }
 
@@ -46,6 +48,9 @@ public class UserResponse {
 
     public BigDecimal getInitialBalance() { return initialBalance; }
     public void setInitialBalance(BigDecimal initialBalance) { this.initialBalance = initialBalance; }
+
+    public BigDecimal getCurrentBalance() { return currentBalance; }
+    public void setCurrentBalance(BigDecimal currentBalance) { this.currentBalance = currentBalance; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

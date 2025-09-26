@@ -416,4 +416,138 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
         }
     }
+
+    @PutMapping("/{clientId}/balance")
+    @Operation(
+        summary = "Update user current balance",
+        description = "Update the current balance for a specific user. This will update the balance without triggering risk checks."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Balance updated successfully",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = UserResponse.class),
+                examples = @ExampleObject(
+                    name = "Balance Update Success",
+                    value = """
+                    {
+                        "clientId": "1234567890",
+                        "isActive": true,
+                        "tradingEnabled": true,
+                        "dailyRiskAbsolute": 1000.00,
+                        "dailyRiskPercentage": 5.0,
+                        "initialBalance": 10000.00,
+                        "currentBalance": 9500.00,
+                        "createdAt": "2025-09-26T10:30:00Z"
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid request or user not found",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Error Response",
+                    value = """
+                    {
+                        "status": "error",
+                        "message": "User not found"
+                    }
+                    """
+                )
+            )
+        )
+    })
+    public ResponseEntity<UserResponse> updateUserBalance(
+            @Parameter(description = "Client ID of the user") @PathVariable String clientId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                description = "Balance update request",
+                required = true,
+                content = @Content(
+                    mediaType = "application/json",
+                    examples = @ExampleObject(
+                        name = "Balance Update Request",
+                        value = """
+                        {
+                            "currentBalance": 9500.00
+                        }
+                        """
+                    )
+                )
+            )
+            @Valid @RequestBody com.assessment.riskmanagement.dto.BalanceUpdateRequest balanceRequest) {
+        try {
+            UserResponse updatedUser = userService.updateUserBalance(clientId, balanceRequest.getCurrentBalance());
+            return ResponseEntity.ok(updatedUser);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
+
+    @GetMapping("/{clientId}/balance")
+    @Operation(
+        summary = "Get user current balance",
+        description = "Retrieve the current balance for a specific user."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Balance retrieved successfully",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Balance Response",
+                    value = """
+                    {
+                        "status": "success",
+                        "clientId": "1234567890",
+                        "currentBalance": 9500.00
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "Error Response",
+                    value = """
+                    {
+                        "status": "error",
+                        "message": "User not found"
+                    }
+                    """
+                )
+            )
+        )
+    })
+    public ResponseEntity<Map<String, Object>> getUserBalance(
+            @Parameter(description = "Client ID of the user") @PathVariable String clientId) {
+        try {
+            java.math.BigDecimal currentBalance = userService.getUserCurrentBalance(clientId);
+
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("status", "success");
+            response.put("clientId", clientId);
+            response.put("currentBalance", currentBalance);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = Map.of(
+                    "status", "error",
+                    "message", e.getMessage()
+            );
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+        }
+    }
 }

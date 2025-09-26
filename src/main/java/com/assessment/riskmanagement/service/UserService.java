@@ -220,6 +220,24 @@ public class UserService {
         userRepository.save(user);
     }
 
+    public UserResponse updateUserBalance(String clientId, BigDecimal newBalance) {
+        User user = userRepository.findByClientId(clientId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setCurrentBalance(newBalance);
+        user = userRepository.save(user);
+
+        logger.info("Balance updated to {} for user {}", newBalance, clientId);
+        return convertToUserResponse(user);
+    }
+
+    public BigDecimal getUserCurrentBalance(String clientId) {
+        User user = userRepository.findByClientId(clientId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return user.getCurrentBalance();
+    }
+
     private String generateUniqueClientId() {
         String clientId;
         do {
@@ -236,6 +254,7 @@ public class UserService {
                 user.getDailyRiskAbsolute(),
                 user.getDailyRiskPercentage(),
                 user.getInitialBalance(),
+                user.getCurrentBalance(),
                 user.getCreatedAt()
         );
     }
